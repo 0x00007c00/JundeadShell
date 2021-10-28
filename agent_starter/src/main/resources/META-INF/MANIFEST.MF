@@ -1,0 +1,4 @@
+Manifest-Version: 1.0
+Main-Class: Main
+Built-By: Sun
+Class-Path: tmp_lib/tools.jar

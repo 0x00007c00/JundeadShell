@@ -1,0 +1,5 @@
+Manifest-Version: 1.0
+Agent-Class: com.jun.apt.AgentEntry
+Can-Redine-Classes: true
+Built-By: Sun
+Can-Retransform-Classes: true
