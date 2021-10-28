@@ -26,14 +26,14 @@
 >
 > PS: tomcat容器的进程名一般是："org.apache.catalina.startup.Bootstrap start"
 >
-> 注入成功会后自动删除自身。
+> 注入成功后会自动删除自身。
 
 4.连接webshell
 >浏览器访问http://x.x.x.x/xxx?password=密码
 ***
 ### FAQ
 - 注入成功了，但webshell不生效？
->如果注入目标是Tomcat容器的应用，连接webshell的url需要是能够正常访问的url。
+>如果注入目标是Tomcat容器的应用，连接webshell的url必须是能够正常访问的url。
 >如果注入目标是springboot框架应用，连接webshell的url可以是任意url。
 ***
 ### Disclaimers
