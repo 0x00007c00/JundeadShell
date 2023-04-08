@@ -2,7 +2,7 @@ package util;
 
 import com.sun.tools.attach.VirtualMachine;
 import com.sun.tools.attach.VirtualMachineDescriptor;
-import cons.Constant;
+import cons.Constants;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -25,11 +25,11 @@ public class ClientUtil {
                 Logger.print("List all Java processes.");
                 List<VirtualMachineDescriptor> list = VirtualMachine.list();
                 for (VirtualMachineDescriptor vmd : list) {
-                    if (!vmd.displayName().contains(Constant.AGENT_STARTER))
+                    if (!vmd.displayName().contains(Constants.AGENT_STARTER))
                         Logger.print("pid:" + vmd.id() + ", displayName:" + vmd.displayName());
                 }
                 List<String> l = new ArrayList<String>();
-                l.add(Constant.LOCAL_PID);
+                l.add(Constants.LOCAL_PID);
                 FileUtil.clean4windows(l);
                 FileUtil.delTmpLib();
                 return null;
@@ -44,8 +44,6 @@ public class ClientUtil {
             }
             map.put("assignName", assignName);
             map.put("tomcat_version", tomcat_version);
-            Constant.START_ARGS = assignName;
-            Constant.TOMCAT_VERSION = tomcat_version;
         } else {
             Logger.help();
             return null;

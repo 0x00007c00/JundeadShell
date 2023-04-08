@@ -1,17 +1,17 @@
 package util;
 
-import cons.Constant;
+import cons.Constants;
 
 public class Logger {
     public static void print(Object x) {
         System.out.println(x);
-        if ("true".equals(Constant.DEBUG)) {
+        if ("true".equals(Constants.DEBUG)) {
             FileUtil.outPutLog(String.valueOf(x));
         }
     }
 
     public static void printErr(Object x) {
-        System.err.println(x);
+        System.err.println("[Error] " + x);
     }
 
     public static void help() {
@@ -23,6 +23,6 @@ public class Logger {
     }
 
     public static void tips() {
-        System.out.println("Run \"java -jar " + Constant.AGENT_STARTER + " help\" to view more help information.");
+        System.out.println("Run \"java -jar " + Constants.AGENT_STARTER + " help\" to view more help information.");
     }
 }

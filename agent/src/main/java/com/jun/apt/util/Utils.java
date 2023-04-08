@@ -45,6 +45,22 @@ public class Utils {
         }
     }
 
+    public static String getStringFromFile(String fileName) {
+        try {
+            StringBuilder sb = new StringBuilder();
+            BufferedReader br = new BufferedReader(new FileReader(fileName));
+            String line;
+            while ((line = br.readLine()) != null) {
+                sb.append(line);
+            }
+            br.close();
+            return sb.toString();
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
     public static void readFile(String dirPath, String fileName) throws Exception {
         File f = new File(dirPath + File.separator + fileName);
         InputStream is = new BufferedInputStream(new FileInputStream(f));
@@ -102,7 +118,12 @@ public class Utils {
             in = new FileInputStream(path);
             Properties prop = new Properties();
             prop.load(in);
-            val = prop.getProperty(key).trim();
+            val = prop.getProperty(key);
+            if (val == null) {
+                val = "";
+            } else {
+                val = val.trim();
+            }
         } catch (FileNotFoundException e) {
             e.printStackTrace();
         } catch (IOException e) {

